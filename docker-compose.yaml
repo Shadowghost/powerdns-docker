@@ -1,0 +1,59 @@
+version: "3.9"
+services:
+  pd-db:
+    image: docker.io/library/postgres:12
+    container_name: pd-db
+    environment:
+      TZ: Europe/Berlin
+      POSTGRES_USER: "pd"
+      POSTGRES_PASSWORD: "<POSTGRES_PASSWORD>"
+      POSTGRES_DB: "pd"
+    volumes:
+      - ./pd-db:/var/lib/postgresql/data
+  pd:
+    image: pd:bullseye
+    container_name: pd
+    build:
+      context: ./build
+      dockerfile: Dockerfile.powerdns
+    environment:
+      TZ: Europe/Berlin
+      PDNS_BACKEND: pgsql
+      PDNS_MASTER: "yes"
+      PDNS_SLAVE: "no"
+      PDNS_API_KEY: "<PDNS_API_KEY>"
+      POSTGRES_USER: "pd"
+      POSTGRES_PASSWORD: "<POSTGRES_PASSWORD>"
+      POSTGRES_DB: "pd"
+      POSTGRES_HOST: "pd-db"
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+  pda-db:
+    image: docker.io/library/postgres:12
+    container_name: pda-db
+    environment:
+      TZ: Europe/Berlin
+      POSTGRES_USER: "pda"
+      POSTGRES_PASSWORD: ""
+      POSTGRES_DB: "pda"
+    volumes:
+      - ./pda-db:/var/lib/postgresql/data
+  pda:
+    image: docker.io/ngoduykhanh/powerdns-admin:latest
+    container_name: pda
+    ports:
+      - "8080:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+    environment:
+      SQLALCHEMY_DATABASE_URI: "postgresql://pda:<POSTGRES_PASSWORD>@pda-db/pda"
+      GUNICORN_TIMEOUT: 60
+      GUNICORN_WORKERS: 2
+      GUNICORN_LOGLEVEL: "DEBUG"
+      OFFLINE_MODE: "False" # True for offline, False for external resources
+    depends_on:
+      - pda-db
+      - pd
